@@ -1,6 +1,19 @@
-BOT_TOKEN = "8572890476:AAHVRIrKb_8JuZI_gvjWputPWKNE78AxNvU"
-WEBHOOK_URL="telegram-cw6tf3qdl-norrakillens-projects.vercel.app/webhook-endpoint"
-SECRET_TOKEN="7b723ea01983026c22478f5150f1be3d7a200c64"
+import os
+from dotenv import load_dotenv
 
-# Пути к данным
-INTENTS_FILE = "data/intents.json"
+load_dotenv()
+
+# Настройки бота
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8572890476:AAHVRIrKb_8JuZI_gvjWputPWKNE78AxNvU")
+
+# Настройки NLP
+NLP_MODEL = "ru_core_news_sm"
+CONFIDENCE_THRESHOLD = 0.3
+
+# Настройки логирования
+LOG_LEVEL = "INFO"
+LOG_FILE = "bot_nlp.log"
+
+# Настройки статистики
+STATS_FILE = "bot_stats.json"
+SAVE_STATS_INTERVAL = 100  # сообщений

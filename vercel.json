@@ -2,14 +2,18 @@
   "version": 2,
   "builds": [
     {
-      "src": "main.py",  // или другой файл запуска
-      "use": "@vercel/python"  // для Python
+      "src": "main.py",
+      "use": "@vercel/python"
     }
   ],
   "routes": [
     {
+      "src": "/webhook",
+      "dest": "/main.py"
+    },
+    {
       "src": "/(.*)",
-      "dest": "/"
+      "status": 404
     }
   ]
 }
