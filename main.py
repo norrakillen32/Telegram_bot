@@ -52,3 +52,23 @@ def send_message(chat_id: int, text: str):
         
         headers = {
             "Content-Type": "application/json; charset=utf-8"
+        }
+        
+        response = requests.post(
+            url,
+            json=payload,
+            headers=headers,
+            timeout=5
+        )
+        
+        if response.status_code == 200:
+            logger.info("Сообщение отправлено успешно: %s", response.json())
+        else:
+            logger.error(
+                "Ошибка API: %d %s", 
+                response.status_code,
+                response.text
+            )
+            
+    except Exception as e:
+        logger.exception("Ошибка отправки сообщения: %s", e)
