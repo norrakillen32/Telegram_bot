@@ -1,4 +1,3 @@
-@@ -1,33 +1,75 @@
 from flask import Flask, request, jsonify
 import os
 import requests
@@ -13,7 +12,6 @@ logger = logging.getLogger(__name__)
 @app.route('/webhook', methods=['POST'])
 def webhook():
     update = request.get_json()
-    print("Получено обновление:", update)  # Логируем в консоль/файл
     logger.info("Получено обновление: %s", update)
 
     if 'message' in update and 'text' in update['message']:
@@ -31,7 +29,6 @@ def webhook():
         # Отправляем ответ
         send_message(chat_id, f"Вы написали: {user_text}")
     else:
-        print("Не текстовое сообщение:", update)  # Логируем неподдерживаемые типы
         logger.info("Не текстовое сообщение: %s", update)
 
     return jsonify({'status': 'ok'}), 200
@@ -39,10 +36,6 @@ def webhook():
 def send_message(chat_id: int, text: str):
     """Отправка сообщения через Telegram API с явным указанием UTF-8"""
     try:
-        # Исправленный URL
-        url = f"https://api.telegram.org/bot{os.getenv('TELEGRAM_BOT_TOKEN')}/sendMessage"
-        payload = {"chat_id": chat_id, "text": text}
-        response = requests.post(url, json=payload, timeout=5)
         # Формируем URL (убедимся, что токен не содержит не-ASCII символов)
         token = os.getenv('TELEGRAM_BOT_TOKEN')
         if not token:
@@ -69,10 +62,8 @@ def send_message(chat_id: int, text: str):
         )
         
         if response.status_code == 200:
-            print("Сообщение отправлено успешно!", response.json())
             logger.info("Сообщение отправлено успешно: %s", response.json())
         else:
-            print(f"Ошибка API: {response.status_code}", response.text)
             logger.error(
                 "Ошибка API: %d %s", 
                 response.status_code,
@@ -80,5 +71,5 @@ def send_message(chat_id: int, text: str):
             )
             
     except Exception as e:
-        print("Ошибка отправки:", e)
         logger.exception("Ошибка отправки сообщения: %s", e)
+
