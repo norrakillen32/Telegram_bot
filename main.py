@@ -19,12 +19,15 @@ def webhook():
     return jsonify({'status': 'ok'}), 200
 
 def send_message(chat_id: int, text: str):
-    """Отправка сообщения через Telegram API"""
     try:
+        # Исправленный URL
         url = f"https://api.telegram.org/bot{os.getenv('TELEGRAM_BOT_TOKEN')}/sendMessage"
         payload = {"chat_id": chat_id, "text": text}
         response = requests.post(url, json=payload, timeout=5)
-        print("Ответ Telegram:", response.status_code, response.json())  # Логируем результат
+        if response.status_code == 200:
+            print("Сообщение отправлено успешно!", response.json())
+        else:
+            print(f"Ошибка API: {response.status_code}", response.text)
     except Exception as e:
-        print("Ошибка отправки сообщения:", e)
+        print("Ошибка отправки:", e)
 
