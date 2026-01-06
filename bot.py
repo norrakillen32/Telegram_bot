@@ -34,7 +34,6 @@ if not TOKEN:
 application = Application.builder().token(TOKEN).build()
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print("🚀 Обработчик /start ВЫЗВАН!")
     keyboard = [
         [KeyboardButton("Как создать накладную?"), KeyboardButton("Где отчёт о прибыли?")],
         [KeyboardButton("Как провести оплату поставщику?")]
