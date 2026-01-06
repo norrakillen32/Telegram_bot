@@ -6,7 +6,7 @@
   "routes": [
     { 
       "src": "/webhook",
-      "dest": "/api/main/webhook"  // Полный путь к обработчику
+      "dest": "/api/main/webhook" 
     },
     {
       "src": "/",
