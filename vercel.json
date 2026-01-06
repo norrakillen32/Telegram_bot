@@ -1,12 +1,17 @@
-
 {
   "version": 2,
   "builds": [
     { "src": "main.py", "use": "@vercel/python" }
   ],
   "routes": [
-    { "src": "/webhook", "dest": "/api/main" },
-    { "src": "/", "dest": "/api/main" }
+    { 
+      "src": "/webhook",
+      "dest": "/api/main/webhook"  // Полный путь к обработчику
+    },
+    {
+      "src": "/",
+      "dest": "/api/main"
+    }
   ]
 }
 
