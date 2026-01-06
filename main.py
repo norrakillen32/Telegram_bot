@@ -25,25 +25,24 @@ def log_request_info():
 @app.route('/webhook', methods=['POST'])
 def webhook():
     try:
-        # Логируем начало обработки
-        logger.info("Получен POST-запрос на /webhook")
-        
         update_json = request.get_json()
-        if not update_json:
-            logger.error("Пустое обновление (request.get_json() вернул None)")
-            return jsonify({'status': 'error', 'message': 'Empty update'}), 400
-
-        # Логируем содержимое обновления (осторожно: может быть много данных)
-        logger.debug(f"Получено обновление: {update_json}")
-
-        from telegram import Update
-        update = Update.de_json(update_json, application.bot)
-        application.process_update(update)
+        logger.info(f"Обновление: {update_json}")
         
-        logger.info("Обновление обработано успешно")
+        if update_json and 'message' in update_json:
+            chat_id = update_json['message']['chat']['id']
+            user_text = update_json['message'].get('text', '')
+            
+            # Отправляем ответ напрямую через API
+            application.bot.send_message(
+                chat_id=chat_id,
+                text=f"✅ Получил ваше сообщение: '{user_text}'\nНо обработчики пока не работают."
+            )
+            logger.info(f"Ответ отправлен в чат {chat_id}")
+        
         return jsonify({'status': 'ok'}), 200
+        
     except Exception as e:
-        logger.exception(f"Ошибка обработки вебхука: {e}")  # logger.exception выводит стектрейс
+        logger.exception(f"Ошибка: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 @app.route('/', methods=['GET'])
