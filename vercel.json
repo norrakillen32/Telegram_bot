@@ -3,17 +3,30 @@
   "builds": [
     {
       "src": "main.py",
-      "use": "@vercel/python"
+      "use": "@vercel/python",
+      "config": {
+        "maxLambdaSize": "500mb",
+        "runtime": "python3.11"  // ← Ключевое изменение!
+      }
     }
   ],
   "routes": [
     {
       "src": "/webhook",
-      "dest": "/main.py"
+      "dest": "/api/main"
     },
     {
       "src": "/(.*)",
       "status": 404
     }
-  ]
+  ],
+  "functions": {
+    "api/*": {
+      "memory": 2048,
+      "maxDuration": 10
+    }
+  },
+  "env": {
+    "TRANSFORMERS_OFFLINE": "1"
+  }
 }
