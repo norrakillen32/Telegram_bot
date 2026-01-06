@@ -18,6 +18,10 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 CORS(app)
 
+@app.before_request
+def log_request_info():
+    logger.info('Входящий запрос: %s %s', request.method, request.path)
+    
 @app.route('/webhook', methods=['POST'])
 def webhook():
     try:
