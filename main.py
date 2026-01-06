@@ -2,10 +2,13 @@ from flask import Flask, request, jsonify
 from bot import application
 import logging
 
+
 app = Flask(__name__)
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
@@ -29,3 +32,6 @@ def webhook():
 def health():
     return jsonify({'status': 'ok', 'service': 'Telegram 1C Bot'})
 
+
+if __name__ == '__main__':
+    app.run()
