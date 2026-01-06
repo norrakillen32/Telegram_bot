@@ -37,7 +37,7 @@ def webhook():
         application.process_update(update)
         
         logger.info("Обновление обработано успешно")
-        return jsonify({'status': 'ok'}), 2 Newton
+        return jsonify({'status': 'ok'}), 200
     except Exception as e:
         logger.exception(f"Ошибка обработки вебхука: {e}")  # logger.exception выводит стектрейс
         return jsonify({'status': 'error', 'message': str(e)}), 500
