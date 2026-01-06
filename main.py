@@ -1,8 +1,9 @@
 import os
 import logging
 import json
+import asyncio
 from flask import Flask, request, jsonify
-from telegram import Update, Bot
+from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
 # --- НАСТРОЙКА ---
@@ -11,9 +12,9 @@ if not TELEGRAM_TOKEN:
     raise ValueError("TELEGRAM_BOT_TOKEN не задан!")
 
 app = Flask(__name__)
-bot = Bot(token=TELEGRAM_TOKEN)
 
-# 1. СОЗДАЕМ ПРИЛОЖЕНИЕ python-telegram-bot
+# 1. СОЗДАЕМ И ИНИЦИАЛИЗИРУЕМ ПРИЛОЖЕНИЕ ТЕЛЕГРАМ-БОТА ОДИН РАЗ
+# Это глобальный объект, который будет использоваться для всех запросов
 application = Application.builder().token(TELEGRAM_TOKEN).build()
 
 # --- ЭТАП 1: ЛОКАЛЬНАЯ БАЗА ЗНАНИЙ ---
@@ -30,6 +31,7 @@ class LocalKnowledgeBase:
         user_q = user_question.lower()
         for qa in self.qa_pairs:
             db_q = qa.get("question", "").lower()
+            # Простой поиск по вхождению строки
             if db_q in user_q or user_q in db_q:
                 return qa.get("answer")
         return None
@@ -45,7 +47,7 @@ def search_in_1c_docs(question: str) -> str:
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "Привет! Я бот-помощник по 1С. Задайте вопрос — я поищу ответ в базе знаний, а затем в документации.\n\n"
-        "Попробуйте спросить: 'Как создать накладную?'"
+        "Попробуйте спросить: 'Как создать накладную?' или 'Где отчет о прибылях?'"
     )
 
 async def handle_user_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -65,7 +67,7 @@ async def handle_user_message(update: Update, context: ContextTypes.DEFAULT_TYPE
 application.add_handler(CommandHandler("start", start_command))
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_user_message))
 
-# Важно: инициализируем приложение
+# Инициализируем приложение (важный шаг!)
 application.initialize()
 
 # --- FLASK ЭНДПОИНТЫ ---
@@ -81,17 +83,21 @@ def webhook():
         logging.info(f"Получен вебхук: {update_data}")
 
         # 2. Создаем объект Update
-        update = Update.de_json(update_data, bot)
+        update = Update.de_json(update_data, application.bot)
 
-        # 3. ГЛАВНОЕ: синхронно обрабатываем обновление
-        # Используем run_until_complete для синхронного вызова асинхронного кода
-        application.run_until_complete(application.process_update(update))
+        # 3. ПРАВИЛЬНЫЙ СПОСОБ: запускаем обработку в существующем event loop
+        # Это ключевое исправление!
+        async def process_update_async():
+            await application.process_update(update)
+        
+        # Запускаем асинхронную обработку
+        asyncio.run(process_update_async())
 
         # 4. Отвечаем Telegram, что всё ок
         return jsonify({"status": "ok"}), 200
 
     except Exception as e:
-        logging.error(f"Ошибка в /webhook: {e}")
+        logging.error(f"Ошибка в /webhook: {e}", exc_info=True)
         return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/', methods=['GET'])
