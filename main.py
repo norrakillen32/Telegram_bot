@@ -18,12 +18,6 @@ def webhook():
 
 def send_message(chat_id: int, text: str):
     """Отправка сообщения через Telegram API"""
-    url = f"https://api.telegram.org/bot{os.getenv('TELEGRAM_BOT_TOKEN')}/sendMessage"
-    payload = {
-        "chat_id": chat_id,
-        "text": text
-    }
-    requests.post(url, json=payload)
     try:
         url = f"https://api.telegram.org/bot{os.getenv('TELEGRAM_BOT_TOKEN')}/sendMessage"
         payload = {"chat_id": chat_id, "text": text}
