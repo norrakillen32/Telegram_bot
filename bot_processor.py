@@ -1,7 +1,7 @@
 import os
 import requests
 from typing import Dict, Any
-from nlp_engine import search_answer
+from nlp_engine import nlp_engine
 
 class TelegramAPI:
     """Работа с Telegram Bot API"""
@@ -170,7 +170,6 @@ class BotProcessor:
             '/stats': self._handle_stats,
             '/feedback': self._handle_feedback
         }
-        
         handler = commands.get(command.split('@')[0])  # Убираем username бота если есть
         if handler:
             return handler(chat_id, args)
@@ -235,24 +234,17 @@ class BotProcessor:
         
         return self.telegram.send_message(chat_id, stats_text)
     
-    def handle_feedback(self, chat_id: int, user_feedback: str, context: Dict):
-        """Обработка обратной связи от пользователя"""
-        if user_feedback.lower() in ['нет', 'неверно', 'wrong']:
-            # Запрос правильного ответа
-            self.telegram.send_message(
-                chat_id,
-                "Пожалуйста, напишите правильный ответ:"
-            )
-            # Сохраняем контекст для следующего сообщения
-            self.user_sessions[chat_id]['awaiting_correction'] = context
-            
-        elif user_feedback.lower() in ['да', 'верно', 'correct']:
-            # Записываем положительную обратную связь
-            process_feedback(
-                question=context['question'],
-                bot_answer=context['bot_answer'],
-                is_correct=True
-            )
+    def _handle_feedback(self, chat_id: int, args: str) -> bool:
+        """Обработка команды /feedback"""
+        feedback_text = """📝 <b>Оставить отзыв:</b>
+
+Пожалуйста, напишите ваш отзыв или предложение по улучшению бота.
+
+Ваше мнение поможет сделать бота лучше! 💪
+
+<i>Просто напишите ваше сообщение, и оно будет отправлено разработчикам.</i>"""
+        
+        return self.telegram.send_message(chat_id, feedback_text)
     
     def _handle_unknown_command(self, chat_id: int, command: str) -> bool:
         """Обработка неизвестной команды"""
@@ -263,20 +255,18 @@ class BotProcessor:
         )
     
     def handle_message(self, chat_id: int, user_message: str) -> bool:
-        """Обработка сообщения с использованием обученной NLP-модели"""
-        # Поиск ответа через обученную модель
-        answer = search_answer(user_message, threshold=0.4)
+        """Обработка обычного сообщения"""
+        # Обновляем сессию пользователя
+        self._update_user_session(chat_id, user_message)
         
-        # Отправка ответа
-        self.telegram.send_message(chat_id, answer)
+        # Показываем индикатор "печатает"
+        self.telegram.send_typing_action(chat_id)
         
-        # Предложение оценить ответ (для сбора обратной связи)
-        self.telegram.send_message(
-            chat_id,
-            "Был ли этот ответ полезен? (да/нет)"
-        )
+        # Обрабатываем сообщение через NLP-движок
+        final_answer = nlp_engine.get_final_answer(user_message)
         
-        return True
+        # Отправляем ответ
+        return self.telegram.send_message(chat_id, final_answer)
     
     def process_update(self, update_data: Dict[str, Any]) -> bool:
         """Обработка входящего обновления от Telegram"""
@@ -305,4 +295,4 @@ class BotProcessor:
             return False
 
 # Создаем глобальный экземпляр процессора
-bot_processor = BotProcessor()
+bot_processor = BotProcessor()      
