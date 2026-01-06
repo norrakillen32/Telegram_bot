@@ -4,6 +4,7 @@ import json
 from flask import Flask, request, jsonify
 from telegram import Update, Bot
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+
 # --- НАСТРОЙКА ---
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 if not TELEGRAM_TOKEN:
