@@ -258,6 +258,8 @@ class NLPEngine:
         self.kb_searcher = KnowledgeBaseSearcher()
         self.button_handler = ButtonHandler(self.kb_searcher)
         self._current_options = {}
+        print("✅ NLPEngine инициализирован")
+        print(f"📊 Загружено {len(self.kb_searcher.kb_data)} записей из базы знаний")
     
     def process_message(self, user_message: str) -> Dict[str, Any]:
         print(f"\n📨 Получено сообщение: '{user_message}'")
@@ -314,38 +316,46 @@ class NLPEngine:
         return result
     
     def get_final_answer(self, user_message: str) -> str:
-        analysis = self.process_message(user_message)
-        
-        if analysis['has_kb_answer']:
-            kb_item = analysis['kb_item']
-            answer = kb_item.get('answer', '')
-            confidence = analysis['kb_confidence']
+        print(f"🔍 get_final_answer вызван с: '{user_message}'")
+        try:
+            analysis = self.process_message(user_message)
             
-            # Если уверенность низкая (< 65%), предлагаем уточнить
-            if confidence < 0.65:
-                clarification_response = self.get_clarification_response(analysis)
-                return clarification_response
-            
-            # Для кнопок добавляем специальное оформление
-            if analysis.get('is_button_click'):
-                source = kb_item.get('source', '')
-                button_text = kb_item.get('metadata', {}).get('button_text', '')
+            if analysis['has_kb_answer']:
+                kb_item = analysis['kb_item']
+                answer = kb_item.get('answer', '')
+                confidence = analysis['kb_confidence']
                 
-                if button_text and source in ['menu', 'button']:
-                    header = f"🔘 **{button_text}**\n\n"
-                    return header + answer
+                # Если уверенность низкая (< 65%), предлагаем уточнить
+                if confidence < 0.65:
+                    clarification_response = self.get_clarification_response(analysis)
+                    return clarification_response
+                
+                # Для кнопок добавляем специальное оформление
+                if analysis.get('is_button_click'):
+                    source = kb_item.get('source', '')
+                    button_text = kb_item.get('metadata', {}).get('button_text', '')
+                    
+                    if button_text and source in ['menu', 'button']:
+                        header = f"🔘 **{button_text}**\n\n"
+                        return header + answer
+                
+                # Для fuzzy match добавляем пояснение
+                confidence_percent = int(confidence * 100)
+                
+                if analysis.get('is_fuzzy_match'):
+                    original_question = kb_item.get('question', '')
+                    return f"✅ {answer}\n\n<i>(Возможно, вы имели в виду: '{original_question}'. Найдено с уверенностью {confidence_percent}%)</i>"
+                else:
+                    return f"✅ {answer}\n\n<i>(Найдено в базе знаний с уверенностью {confidence_percent}%)</i>"
             
-            # Для fuzzy match добавляем пояснение
-            confidence_percent = int(confidence * 100)
+            suggestions = self._get_search_suggestions(user_message)
+            return f"🤔 <b>К сожалению, я не смог найти ответ на ваш вопрос.</b>\n\n{suggestions}"
             
-            if analysis.get('is_fuzzy_match'):
-                original_question = kb_item.get('question', '')
-                return f"✅ {answer}\n\n<i>(Возможно, вы имели в виду: '{original_question}'. Найдено с уверенностью {confidence_percent}%)</i>"
-            else:
-                return f"✅ {answer}\n\n<i>(Найдено в базе знаний с уверенностью {confidence_percent}%)</i>"
-        
-        suggestions = self._get_search_suggestions(user_message)
-        return f"🤔 <b>К сожалению, я не смог найти ответ на ваш вопрос.</b>\n\n{suggestions}"
+        except Exception as e:
+            print(f"❌ Ошибка в get_final_answer: {e}")
+            import traceback
+            traceback.print_exc()
+            return f"❌ <b>Произошла ошибка при обработке запроса:</b>\n\n{str(e)[:200]}"
     
     def get_clarification_response(self, analysis: Dict) -> str:
         kb_item = analysis.get('kb_item')
