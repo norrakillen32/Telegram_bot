@@ -736,58 +736,21 @@ class NLPEngine:
         return result
     
     def get_final_answer(self, user_message: str) -> str:
-        """Получение финального ответа с уточнениями при низкой уверенности"""
-        analysis = self.process_message(user_message)
+    analysis = self.process_message(user_message)
+    
+    # Если нашли в базе знаний
+    if analysis['has_kb_answer']:
+        confidence = analysis['kb_confidence']
         
-        # Если нашли в базе знаний
-        if analysis['has_kb_answer']:
-            kb_item = analysis['kb_item']
-            confidence = analysis['kb_confidence']
-            
-            # Если уверенность низкая (< 65%), предлагаем уточнить
-            if confidence < 0.65 and analysis['main_intent'] != 'unknown':
-                intent_desc = analysis['intent_description']
-                original_q = kb_item.get('question', '')
-                
-                # Формируем уточняющий вопрос на основе интента
-                clarification_map = {
-                    'payment_to_supplier': "уточните, вам нужна инструкция по **оплате поставщику** или по **оприходованию полученного от него товара**?",
-                    'goods_receipt': "уточните, вам нужна инструкция по **оприходованию товара от поставщика** или по **оплате ему**?",
-                    'invoice_creation': "уточните, вам нужна инструкция по **созданию накладной** или по **ее оплате/получению**?",
-                    'debt_analysis': "уточните, вас интересует **дебиторская задолженность** (нам должны) или **кредиторская** (мы должны)?"
-                }
-                
-                clarification = clarification_map.get(
-                    analysis['main_intent'], 
-                    "уточните, пожалуйста, ваш вопрос?"
-                )
-                
-                return f"🤔 **Я нашел несколько возможных ответов.**\n\n{clarification}\n\n*Похожий вопрос в базе: «{original_q}»*"
-            
-            # Если уверенность высокая, показываем ответ
-            answer = kb_item.get('answer', '')
-            
-            # Для кнопок добавляем специальное оформление
-            if analysis.get('is_button_click'):
-                source = kb_item.get('source', '')
-                button_text = kb_item.get('metadata', {}).get('button_text', '')
-                
-                if button_text and source in ['menu', 'button']:
-                    header = f"🔘 **{button_text}**\n\n"
-                    return header + answer
-            
-            # Для fuzzy match добавляем пояснение
-            confidence_percent = int(confidence * 100)
-            
-            if analysis.get('is_fuzzy_match'):
-                original_question = kb_item.get('question', '')
-                return f"✅ {answer}\n\n<i>(Возможно, вы имели в виду: '{original_question}'. Найдено с уверенностью {confidence_percent}%)</i>"
-            else:
-                return f"✅ {answer}\n\n<i>(Найдено в базе знаний с уверенностью {confidence_percent}%)</i>"
+        # Если уверенность низкая (< 65%), предлагаем уточнить
+        if confidence < 0.65:
+            return self.get_clarification_response(analysis)
         
-        # Если ничего не нашли
-        suggestions = self._get_search_suggestions(user_message)
-        return f"🤔 <b>К сожалению, я не смог найти ответ на ваш вопрос.</b>\n\n{suggestions}"
+        # Если уверенность высокая, показываем обычный ответ
+        return self._format_standard_response(analysis)
+    
+    # Если ничего не нашли
+    return self._get_search_suggestions(user_message)
     
     def _get_search_suggestions(self, query: str) -> str:
         """Получение предложений по поиску"""
@@ -826,6 +789,109 @@ class NLPEngine:
         suggestions += "4. Обратиться к администратору"
         
         return suggestions
-
+        
+    def get_clarification_response(self, analysis: Dict) -> str:
+        """Универсальная генерация уточняющего ответа"""
+        kb_item = analysis.get('kb_item')
+        original_q = kb_item.get('question', '') if kb_item else ''
+        
+        # Получаем категории из тегов вопроса
+        item_tags = kb_item.get('tags', []) if kb_item else []
+        
+        # Ищем вопросы в тех же категориях
+        category_questions = self._get_questions_by_categories(
+            item_tags, 
+            exclude_id=kb_item.get('id') if kb_item else None
+        )
+        
+        # Формируем интерактивное сообщение
+        return self._create_interactive_clarification(
+            original_q,
+            category_questions,
+            analysis.get('intent_description', '')
+        )
+    
+    def _get_questions_by_categories(
+        self, 
+        categories: List[str], 
+        exclude_id: Optional[int] = None,
+        limit: int = 4
+    ) -> List[Dict]:
+        """Получение вопросов по категориям (тегам)"""
+        if not categories:
+            return []
+        
+        categorized_items = []
+        
+        for item in self.kb_searcher.kb_data:
+            if exclude_id and item.get('id') == exclude_id:
+                continue
+                
+            item_tags = item.get('tags', [])
+            common_tags = set(categories) & set(item_tags)
+            
+            if common_tags:
+                # Вычисляем степень релевантности
+                relevance_score = len(common_tags) / len(categories)
+                
+                categorized_items.append({
+                    'item': item,
+                    'relevance': relevance_score,
+                    'question': item.get('question', ''),
+                    'tags': item_tags
+                })
+        
+        # Сортируем по релевантности
+        categorized_items.sort(key=lambda x: x['relevance'], reverse=True)
+        
+        return categorized_items[:limit]
+    
+    def _create_interactive_clarification(
+        self, 
+        original_question: str,
+        alternative_questions: List[Dict],
+        intent_description: str
+    ) -> str:
+        """Создание интерактивного уточняющего сообщения"""
+        
+        if not alternative_questions:
+            # Базовый вариант, если нет альтернатив
+            return (
+                "🤔 **Мне нужно уточнение.**\n\n"
+                f"Я думаю, вы имеете в виду: **«{original_question}»**\n\n"
+                "*Если это не так, пожалуйста, переформулируйте вопрос.*"
+            )
+        
+        # Формируем список альтернатив с эмодзи
+        alternatives_text = []
+        for i, alt in enumerate(alternative_questions, 1):
+            question = alt['question']
+            tags_preview = ", ".join(alt.get('tags', [])[:2]) if alt.get('tags') else ""
+            
+            if tags_preview:
+                alternatives_text.append(f"{i}. 🔹 **{question}** *({tags_preview})*")
+            else:
+                alternatives_text.append(f"{i}. 🔹 **{question}**")
+        
+        # Определяем общую категорию
+        if intent_description and intent_description != 'Неизвестный запрос':
+            category_info = f"**Категория:** {intent_description}\n"
+        else:
+            category_info = ""
+        
+        # Собираем финальное сообщение
+        message = (
+            f"🔍 **Нужно уточнение**\n\n"
+            f"{category_info}"
+            f"Я нашел несколько вариантов, которые могут подходить:\n\n"
+            f"{chr(10).join(alternatives_text)}\n\n"
+            f"**Какой вариант вам нужен?**\n"
+            f"• Напишите номер (1-{len(alternative_questions)})\n"
+            f"• Или опишите задачу другими словами\n"
+            f"• Используйте кнопки меню для точного выбора\n\n"
+            f"*Самый похожий вопрос: «{original_question}»*"
+        )
+        
+        return message        
 # Создаем глобальный экземпляр NLP-движка
 nlp_engine = NLPEngine()
