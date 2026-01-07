@@ -478,17 +478,19 @@ class NLPEngine:
         response = f"🔍 <b>По вашему запросу не найден точный ответ.</b>\n\n"
         response += f"<i>Возможно, вам подойдет:</i>\n\n"
         
+        # Сохраняем опции для этого пользователя
+        self._user_options[user_id] = {}
+        
         for i, sim in enumerate(similar_questions[:3], 1):
             question = sim['question']
             similarity = int(sim['similarity'] * 100)
             response += f"{i}. <b>{question}</b> (сходство: {similarity}%)\n"
+            # Сохраняем ссылку на элемент базы знаний
+            self._user_options[user_id][i] = sim['item']
         
         response += f"\n<b>Выберите номер варианта (1-{min(3, len(similar_questions))})</b>"
         
-        self._user_options[user_id] = {
-            i: sim['item'] for i, sim in enumerate(similar_questions[:3], 1)
-        }
-        
+        print(f"📝 Сохранены опции для пользователя {user_id}: {list(self._user_options[user_id].keys())}")
         return response
     
     def get_clarification_response(self, user_id: int, analysis: Dict) -> str:
@@ -567,33 +569,34 @@ class NLPEngine:
             )
         
         alternatives_text = []
-        option_counter = 1
-        option_map = {}
         
-        for alt in alternative_questions[:3]:
+        # Очищаем старые опции и создаем новые
+        self._user_options[user_id] = {}
+        
+        for i, alt in enumerate(alternative_questions[:3], 1):
             question = alt['question']
             tags_preview = ", ".join(alt.get('tags', [])[:2]) if alt.get('tags') else ""
             
-            option_map[option_counter] = alt['item']
+            # Сохраняем опцию
+            self._user_options[user_id][i] = alt['item']
+            
             if tags_preview:
-                alternatives_text.append(f"{option_counter}. 🔹 **{question}** *({tags_preview})*")
+                alternatives_text.append(f"{i}. 🔹 **{question}** *({tags_preview})*")
             else:
-                alternatives_text.append(f"{option_counter}. 🔹 **{question}**")
-            option_counter += 1
-        
-        self._user_options[user_id] = option_map
+                alternatives_text.append(f"{i}. 🔹 **{question}**")
         
         message = (
             f"🔍 **Нужно уточнение**\n\n"
             f"По вашему запросу я нашел несколько вариантов:\n\n"
             f"{chr(10).join(alternatives_text)}\n\n"
             f"**Какой вариант вам нужен?**\n"
-            f"• Ответьте номером (1-{option_counter-1}) для быстрого выбора\n"
+            f"• Ответьте номером (1-{len(alternatives_text)}) для быстрого выбора\n"
             f"• Или переформулируйте запрос более конкретно\n"
             f"• Используйте кнопки меню для точного выбора\n\n"
             f"*Текущий запрос: «{user_query}»*"
         )
         
+        print(f"📝 Сохранены опции для пользователя {user_id}: {list(self._user_options[user_id].keys())}")
         return message
     
     def _get_search_suggestions(self, query: str) -> str:
@@ -628,21 +631,24 @@ class NLPEngine:
     
     def get_option_selection(self, user_id: int, option_number: int) -> Optional[str]:
         """Обработка выбора опции пользователем"""
-        print(f"🔍 Выбор опции {option_number} для пользователя {user_id}, доступные опции: {self._user_options.get(user_id, {})}")
+        print(f"🔍 Выбор опции {option_number} для пользователя {user_id}")
+        print(f"📋 Доступные опции: {self._user_options.get(user_id, {})}")
         
-        if user_id in self._user_options and option_number in self._user_options[user_id]:
-            selected = self._user_options[user_id][option_number]
-            answer = selected.get('answer', '')
-            source = selected.get('source', '')
-            
-            if source in ['button', 'menu']:
-                button_text = selected.get('metadata', {}).get('button_text', '')
-                return f"🔘 **{button_text}**\n\n{answer}"
-            else:
-                return answer
+        if user_id not in self._user_options:
+            print(f"⚠️ Нет сохраненных опций для пользователя {user_id}")
+            return None
         
-        print(f"⚠️ Опция {option_number} не найдена для пользователя {user_id}")
-        return None
+        if option_number not in self._user_options[user_id]:
+            print(f"⚠️ Опция {option_number} не найдена. Доступные: {list(self._user_options[user_id].keys())}")
+            return None
+        
+        selected = self._user_options[user_id][option_number]
+        answer = selected.get('answer', 'Нет ответа для выбранного варианта')
+        
+        # Очищаем опции после выбора
+        self._user_options[user_id] = {}
+        
+        return answer
 
 # Создаем глобальный экземпляр NLP-движка
 nlp_engine = NLPEngine()
