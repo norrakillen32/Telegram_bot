@@ -323,10 +323,10 @@ class ButtonHandler:
             "📈 Прибыль и убытки": 9,  # отчет о движении денежных средств
             "💰 Денежный поток": 9,  # отчет о движении денежных средств
             "📦 Остатки товаров": 26,  # как посмотреть остатки товаров на складе
-            "👥 Дебиторская задолженность": 23,  # как посмотреть и проанализировать дебиторскую задолженность
+            "👥 Дебиторская задолженность": 23,  # как посмотреть и проанализировать дебиторская задолженность
             "📊 Продажи по периодам": 25,  # как сделать отчет продажи по периодам
             "📋 Товарооборот": 24,  # что такое товарооборот и как его считать
-            "📋 Документы": 200,  # общий раздел документов (нужно добавить в базу)
+            "📋 Документы": 200,  # общий раздел документов
             # Кнопки из других меню
             "📋 Счета": 43,  # как создать счет на оплату покупателю
             "📑 Акта": 12,  # как создать акт выполненных работ
@@ -336,43 +336,67 @@ class ButtonHandler:
             "🆘 Помощь": None,  # вызовет команду /help
         }
     
-        def is_button_click(self, text: str) -> Tuple[bool, Optional[str], Optional[str]]:
-        text_lower = text.lower()
+    def handle_button_click(
+        self, 
+        source_type: str, 
+        button_text: str
+    ) -> Optional[Dict]:
+        # Сначала проверяем маппинг кнопок
+        if button_text in self.button_mapping:
+            item_id = self.button_mapping[button_text]
+            if item_id is None:  # Кнопка "Помощь"
+                return None
+            # Ищем запись по ID
+            for item in self.kb_searcher.kb_data:
+                if item.get('id') == item_id:
+                    return item
         
-        # Проверяем префиксы
-        for prefix in ['button:', 'menu:']:
-            if text_lower.startswith(prefix):
-                parts = text_lower.split(':', 1)
-                if len(parts) == 2:
-                    return True, prefix.rstrip(':'), parts[1].strip()
+        # Если не нашли в маппинге, используем обычный поиск
+        normalized_button = self.preprocessor.normalize_text(button_text)
         
-        # Проверяем кнопки с эмодзи
-        emoji_buttons = [
-            "📦", "📊", "💰", "📋", "📈", "👥", "⚙️", "🆘",
-            "🚚", "🔄", "💳", "💵", "🏦", "🧾", "📑"
-        ]
+        # Удаляем эмодзи для улучшения поиска
+        normalized_button = re.sub(r'[^\w\s]', ' ', normalized_button)
+        normalized_button = re.sub(r'\s+', ' ', normalized_button).strip()
         
-        for emoji in emoji_buttons:
-            if emoji in text:
-                return True, 'button', text
+        exact_match = self.kb_searcher.find_by_exact_question(
+            normalized_button, 
+            source_type=source_type
+        )
         
-        button_patterns = [
-            (['нажать кнопку', 'нажми кнопку', 'нажы кнопку', 'нажатькнопку'], 'button'),
-            (['клик по кнопке', 'кликнуть кнопку', 'клик по', 'кликнуть'], 'button'),
-            (['в меню', 'меню', 'в разедел', 'разедел'], 'menu'),
-            (['раздел', 'раздил', 'радел'], 'menu')
-        ]
+        if exact_match:
+            return exact_match
         
-        for patterns, source_type in button_patterns:
-            for pattern in patterns:
-                if pattern in text_lower:
-                    start_idx = text_lower.find(pattern) + len(pattern)
-                    button_text = text_lower[start_idx:].strip()
-                    if button_text:
-                        return True, source_type, button_text
+        # Пробуем поиск по вхождению ключевых слов
+        keywords = self.preprocessor.extract_keywords(normalized_button)
+        if keywords:
+            for item in self.kb_searcher.kb_data:
+                item_question = self.preprocessor.normalize_text(item.get('question', ''))
+                item_tags = [tag.lower() for tag in item.get('tags', [])]
+                
+                # Проверяем вхождение ключевых слов в вопрос или теги
+                for keyword in keywords:
+                    if (keyword in item_question or 
+                        keyword in item_tags or
+                        any(keyword in tag for tag in item_tags)):
+                        return item
         
-        return False, None, None
+        fuzzy_match, confidence = self.kb_searcher.find_best_match(
+            normalized_button,
+            source_type=source_type,
+            threshold=0.25  # Понижаем порог для кнопок
+        )
         
+        if fuzzy_match and confidence >= 0.25:
+            return fuzzy_match
+        
+        # Последняя попытка: ищем по частичным совпадениям
+        any_match, confidence = self.kb_searcher.find_best_match(
+            normalized_button,
+            threshold=0.15
+        )
+        
+        return any_match
+
 class NLPEngine:
     """Основной NLP-движок"""
     
