@@ -217,35 +217,29 @@ class BotProcessor:
                 f"Пожалуйста, выберите номер из предложенного списка."
             )
     
-    def handle_message(self, chat_id: int, user_message: str) -> bool:
-        self.telegram.send_chat_action(chat_id, "typing")
-        session = self._update_user_session(chat_id, user_message)
+    def handle_command(self, chat_id: int, command: str, args: str = "") -> bool:
+        """Обработка команд бота"""
+        commands = {
+            '/start': self._handle_start,
+            '/help': self._handle_help,
+            '/stats': self._handle_stats,
+        }
         
-        # Проверяем, не является ли сообщение числом (выбором варианта)
-        if user_message.isdigit():
-            option_number = int(user_message)
-            print(f"🔢 Пользователь выбрал вариант {option_number}")
-            
-            # Пытаемся получить ответ по номеру
-            response = self.nlp_engine.get_option_selection(option_number)
-            
-            if response:
-                session['waiting_for_clarification'] = False
-                return self.telegram.send_message(chat_id, response, parse_mode="HTML")
-            else:
-                # Если не нашли по номеру, обрабатываем как обычное сообщение
-                print(f"⚠️ Вариант {option_number} не найден, обрабатываем как обычный запрос")
+        # Убираем возможный username бота из команды
+        clean_command = command.split('@')[0]
+        handler = commands.get(clean_command)
         
-        # Обрабатываем как обычное сообщение
-        final_answer = self.nlp_engine.get_final_answer(user_message)
+        if handler:
+            return handler(chat_id, args)
         
-        # Проверяем, не содержит ли ответ предложение выбрать номер
-        if "выберите номер варианта" in final_answer.lower():
-            session['waiting_for_clarification'] = True
-        
-        return self.telegram.send_message(chat_id, final_answer, parse_mode="HTML")
+        # Если команда не найдена
+        return self.telegram.send_message(
+            chat_id,
+            f"🤔 <b>Неизвестная команда:</b> {command}\n\nИспользуйте /help для просмотра доступных команд."
+        )
     
     def handle_button_click(self, chat_id: int, button_text: str) -> bool:
+        """Обработка нажатия кнопок"""
         session = self._update_user_session(chat_id)
         session['waiting_for_clarification'] = False
         
@@ -316,6 +310,7 @@ class BotProcessor:
         return self.handle_message(chat_id, button_text)
     
     def handle_message(self, chat_id: int, user_message: str) -> bool:
+        """Обработка текстовых сообщений"""
         self.telegram.send_chat_action(chat_id, "typing")
         session = self._update_user_session(chat_id, user_message)
         
@@ -330,6 +325,7 @@ class BotProcessor:
         return self.telegram.send_message(chat_id, final_answer, parse_mode="HTML")
     
     def process_update(self, update_data: Dict[str, Any]) -> bool:
+        """Обработка обновления от Telegram"""
         try:
             if 'message' not in update_data:
                 return False
@@ -343,6 +339,7 @@ class BotProcessor:
             
             print(f"📨 Сообщение от {chat_id}: {text}")
             
+            # Обработка команд
             if text.startswith('/'):
                 return self.handle_command(chat_id, text)
             else:
